@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import random
+import ssl
 from types import TracebackType
 from typing import Any
 import urllib.parse
@@ -74,10 +75,8 @@ class SagemcomClient:
         host: str,
         username: str,
         password: str,
-        authentication_method: EncryptionMethod | None = None,
+        authentication_method: EncryptionMethod | None = EncryptionMethod.MD5,
         session: ClientSession | None = None,
-        ssl: bool | None = False,
-        verify_ssl: bool | None = True,
     ):
         """
         Create a SagemCom client.
@@ -94,22 +93,24 @@ class SagemcomClient:
         self.password = password
         self._current_nonce = None
         self._password_hash = self.__generate_hash(password)
-        self.protocol = "https" if ssl else "http"
+        self.protocol = "https"
 
         self._server_nonce = ""
         self._session_id = 0
         self._request_id = -1
 
-        self.session = (
-            session
-            if session
-            else ClientSession(
-                headers={"User-Agent": f"{DEFAULT_USER_AGENT}"},
-                timeout=ClientTimeout(DEFAULT_TIMEOUT),
-                connector=TCPConnector(
-                    verify_ssl=verify_ssl if verify_ssl is not None else True
-                ),
-            )
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context.set_ciphers("DEFAULT:@SECLEVEL=1")
+
+        self.session = ClientSession(
+            headers={"User-Agent": f"{DEFAULT_USER_AGENT}"},
+            timeout=ClientTimeout(DEFAULT_TIMEOUT),
+            connector=TCPConnector(
+                ssl=ssl_context,
+                # verify_ssl=verify_ssl if verify_ssl is not None else True
+            ),
         )
 
     async def __aenter__(self) -> SagemcomClient:
